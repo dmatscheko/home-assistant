@@ -291,19 +291,19 @@ def check_config(config: dict) -> dict:
         if CONF_FAN_MODE_REGISTER in entity:
             loc_addr.add(f"{entity[CONF_FAN_MODE_REGISTER][CONF_ADDRESS]}_{inx}")
 
-        dup_addrs = ent_addr.intersection(loc_addr)
-        if len(dup_addrs) > 0:
-            for addr in dup_addrs:
-                err = (
-                    f"Modbus {hub_name}/{name} address {addr} is duplicate, second"
-                    " entry not loaded!"
-                )
-                _LOGGER.warning(err)
-            return False
-        if name in ent_names:
-            err = f"Modbus {hub_name}/{name} is duplicate, second entry not loaded!"
-            _LOGGER.warning(err)
-            return False
+        # dup_addrs = ent_addr.intersection(loc_addr)
+        # if len(dup_addrs) > 0:
+        #     for addr in dup_addrs:
+        #         err = (
+        #             f"Modbus {hub_name}/{name} address {addr} is duplicate, second"
+        #             " entry not loaded!"
+        #         )
+        #         _LOGGER.warning(err)
+        #     return False
+        # if name in ent_names:
+        #     err = f"Modbus {hub_name}/{name} is duplicate, second entry not loaded!"
+        #     _LOGGER.warning(err)
+        #     return False
         ent_names.add(name)
         ent_addr.update(loc_addr)
         return True
