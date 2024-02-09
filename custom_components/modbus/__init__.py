@@ -242,8 +242,8 @@ CLIMATE_SCHEMA = vol.All(
     BASE_STRUCT_SCHEMA.extend(
         {
             vol.Required(CONF_TARGET_TEMP): cv.positive_int,
-            vol.Optional(CONF_TARGET_TEMP_SCALE): vol.Any(None, number_validator),
-            vol.Optional(CONF_TARGET_TEMP_OFFSET): vol.Any(None, number_validator),
+            vol.Optional(CONF_TARGET_TEMP_SCALE): vol.Any(None, vol.Coerce(float)),
+            vol.Optional(CONF_TARGET_TEMP_OFFSET): vol.Any(None, vol.Coerce(float)),
             vol.Optional(CONF_TARGET_TEMP_WRITE_REGISTERS, default=False): cv.boolean,
             vol.Optional(CONF_MAX_TEMP, default=35): vol.Coerce(float),
             vol.Optional(CONF_MIN_TEMP, default=5): vol.Coerce(float),
