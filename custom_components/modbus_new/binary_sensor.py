@@ -1,24 +1,22 @@
-"""Support for Modbus Register sensors."""
+"""Support for Modbus Coil and Discrete Input sensors."""
+
 from __future__ import annotations
 
 from datetime import datetime
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import (
-    CONF_STATE_CLASS,
-    RestoreSensor,
-    SensorEntity,
-)
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.const import (
+    CONF_BINARY_SENSORS,
     CONF_DEVICE_CLASS,
     CONF_NAME,
-    CONF_SENSORS,
     CONF_UNIQUE_ID,
-    CONF_UNIT_OF_MEASUREMENT,
+    STATE_ON,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -26,8 +24,13 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from . import get_hub
-from .base_platform import BaseStructPlatform
-from .const import CONF_SLAVE_COUNT, CONF_VIRTUAL_COUNT
+from .base_platform import BasePlatform
+from .const import (
+    CALL_TYPE_COIL,
+    CALL_TYPE_DISCRETE,
+    CONF_SLAVE_COUNT,
+    CONF_VIRTUAL_COUNT,
+)
 from .modbus import ModbusHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,26 +44,26 @@ async def async_setup_platform(
     async_add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up the Modbus sensors."""
+    """Set up the Modbus binary sensors."""
 
     if discovery_info is None:
         return
 
-    sensors: list[ModbusRegisterSensor | SlaveSensor] = []
+    sensors: list[ModbusBinarySensor | SlaveSensor] = []
     hub = get_hub(hass, discovery_info[CONF_NAME])
-    for entry in discovery_info[CONF_SENSORS]:
+    for entry in discovery_info[CONF_BINARY_SENSORS]:
         slave_count = entry.get(CONF_SLAVE_COUNT, None) or entry.get(
             CONF_VIRTUAL_COUNT, 0
         )
-        sensor = ModbusRegisterSensor(hass, hub, entry, slave_count)
+        sensor = ModbusBinarySensor(hass, hub, entry, slave_count)
         if slave_count > 0:
             sensors.extend(await sensor.async_setup_slaves(hass, slave_count, entry))
         sensors.append(sensor)
     async_add_entities(sensors)
 
 
-class ModbusRegisterSensor(BaseStructPlatform, RestoreSensor, SensorEntity):
-    """Modbus register sensor."""
+class ModbusBinarySensor(BasePlatform, RestoreEntity, BinarySensorEntity):
+    """Modbus binary sensor."""
 
     def __init__(
         self,
@@ -69,14 +72,11 @@ class ModbusRegisterSensor(BaseStructPlatform, RestoreSensor, SensorEntity):
         entry: dict[str, Any],
         slave_count: int,
     ) -> None:
-        """Initialize the modbus register sensor."""
-        super().__init__(hass, hub, entry)
-        if slave_count:
-            self._count = self._count * (slave_count + 1)
+        """Initialize the Modbus binary sensor."""
+        self._count = slave_count + 1
         self._coordinator: DataUpdateCoordinator[list[int] | None] | None = None
-        self._attr_native_unit_of_measurement = entry.get(CONF_UNIT_OF_MEASUREMENT)
-        self._attr_state_class = entry.get(CONF_STATE_CLASS)
-        self._attr_device_class = entry.get(CONF_DEVICE_CLASS)
+        self._result: list[int] = []
+        super().__init__(hass, hub, entry)
 
     async def async_setup_slaves(
         self, hass: HomeAssistant, slave_count: int, entry: dict[str, Any]
@@ -93,60 +93,49 @@ class ModbusRegisterSensor(BaseStructPlatform, RestoreSensor, SensorEntity):
             name=name,
         )
 
-        slaves: list[SlaveSensor] = []
-        for idx in range(0, slave_count):
-            slaves.append(SlaveSensor(self._coordinator, idx, entry))
-        return slaves
+        return [
+            SlaveSensor(self._coordinator, idx, entry) for idx in range(slave_count)
+        ]
 
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         await self.async_base_added_to_hass()
-        state = await self.async_get_last_sensor_data()
-        if state:
-            self._attr_native_value = state.native_value
+        if state := await self.async_get_last_state():
+            self._attr_is_on = state.state == STATE_ON
 
     async def async_update(self, now: datetime | None = None) -> None:
         """Update the state of the sensor."""
-        # remark "now" is a dummy parameter to avoid problems with
-        # async_track_time_interval
-        self._cancel_call = None
-        raw_result = await self._hub.async_pb_call(
+
+        # do not allow multiple active calls to the same platform
+        if self._call_active:
+            return
+        self._call_active = True
+        result = await self._hub.async_pb_call(
             self._slave, self._address, self._count, self._input_type
         )
-        if raw_result is None:
+        self._call_active = False
+        if result is None:
             self._attr_available = False
-            self._attr_native_value = None
-            if self._coordinator:
-                self._coordinator.async_set_updated_data(None)
-            self.async_write_ha_state()
-            return
-
-        result = self.unpack_structure_result(raw_result.registers)
-        if self._coordinator:
-            if result:
-                result_array = list(
-                    map(
-                        float if not self._value_is_int else int,
-                        result.split(","),
-                    )
-                )
-                self._attr_native_value = result_array[0]
-                self._coordinator.async_set_updated_data(result_array)
-            else:
-                self._attr_native_value = None
-                self._coordinator.async_set_updated_data(None)
+            self._result = []
         else:
-            self._attr_native_value = result
-        self._attr_available = self._attr_native_value is not None
+            self._attr_available = True
+            if self._input_type in (CALL_TYPE_COIL, CALL_TYPE_DISCRETE):
+                self._result = result.bits
+            else:
+                self._result = result.registers
+            self._attr_is_on = bool(self._result[0] & 1)
+
         self.async_write_ha_state()
+        if self._coordinator:
+            self._coordinator.async_set_updated_data(self._result)
 
 
 class SlaveSensor(
     CoordinatorEntity[DataUpdateCoordinator[list[int] | None]],
-    RestoreSensor,
-    SensorEntity,
+    RestoreEntity,
+    BinarySensorEntity,
 ):
-    """Modbus slave register sensor."""
+    """Modbus slave binary sensor."""
 
     def __init__(
         self,
@@ -154,28 +143,27 @@ class SlaveSensor(
         idx: int,
         entry: dict[str, Any],
     ) -> None:
-        """Initialize the Modbus register sensor."""
+        """Initialize the Modbus binary sensor."""
         idx += 1
-        self._idx = idx
         self._attr_name = f"{entry[CONF_NAME]} {idx}"
+        self._attr_device_class = entry.get(CONF_DEVICE_CLASS)
         self._attr_unique_id = entry.get(CONF_UNIQUE_ID)
         if self._attr_unique_id:
             self._attr_unique_id = f"{self._attr_unique_id}_{idx}"
-        self._attr_native_unit_of_measurement = entry.get(CONF_UNIT_OF_MEASUREMENT)
-        self._attr_state_class = entry.get(CONF_STATE_CLASS)
-        self._attr_device_class = entry.get(CONF_DEVICE_CLASS)
         self._attr_available = False
+        self._result_inx = idx
         super().__init__(coordinator)
 
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         if state := await self.async_get_last_state():
-            self._attr_native_value = state.state
+            self._attr_is_on = state.state == STATE_ON
+            self.async_write_ha_state()
         await super().async_added_to_hass()
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         result = self.coordinator.data
-        self._attr_native_value = result[self._idx] if result else None
+        self._attr_is_on = bool(result[self._result_inx] & 1) if result else None
         super()._handle_coordinator_update()

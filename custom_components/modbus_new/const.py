@@ -1,4 +1,5 @@
 """Constants used in modbus integration."""
+
 from enum import Enum
 
 from homeassistant.const import (
@@ -15,7 +16,6 @@ from homeassistant.const import (
 CONF_BAUDRATE = "baudrate"
 CONF_BYTESIZE = "bytesize"
 CONF_CLIMATES = "climates"
-CONF_CLOSE_COMM_ON_ERROR = "close_comm_on_error"
 CONF_DATA_TYPE = "data_type"
 CONF_DEVICE_ADDRESS = "device_address"
 CONF_FANS = "fans"
@@ -29,11 +29,8 @@ CONF_MSG_WAIT = "message_wait_milliseconds"
 CONF_NAN_VALUE = "nan_value"
 CONF_PARITY = "parity"
 CONF_RETRIES = "retries"
-CONF_RETRY_ON_EMPTY = "retry_on_empty"
 CONF_PRECISION = "precision"
 CONF_SCALE = "scale"
-CONF_TARGET_TEMP_SCALE = "target_temp_scale"
-CONF_TARGET_TEMP_OFFSET = "target_temp_offset"
 CONF_SLAVE_COUNT = "slave_count"
 CONF_STATE_CLOSED = "state_closed"
 CONF_STATE_CLOSING = "state_closing"
@@ -45,11 +42,14 @@ CONF_STATUS_REGISTER = "status_register"
 CONF_STATUS_REGISTER_TYPE = "status_register_type"
 CONF_STEP = "temp_step"
 CONF_STOPBITS = "stopbits"
+CONF_SUM_SCALE = "sum_scale"
 CONF_SWAP = "swap"
 CONF_SWAP_BYTE = "byte"
 CONF_SWAP_WORD = "word"
 CONF_SWAP_WORD_BYTE = "word_byte"
 CONF_TARGET_TEMP = "target_temp_register"
+CONF_TARGET_TEMP_SCALE = "target_temp_scale"
+CONF_TARGET_TEMP_OFFSET = "target_temp_offset"
 CONF_TARGET_TEMP_WRITE_REGISTERS = "target_temp_write_registers"
 CONF_FAN_MODE_REGISTER = "fan_mode_register"
 CONF_FAN_MODE_ON = "state_fan_on"
@@ -73,11 +73,20 @@ CONF_HVAC_MODE_AUTO = "state_auto"
 CONF_HVAC_MODE_DRY = "state_dry"
 CONF_HVAC_MODE_FAN_ONLY = "state_fan_only"
 CONF_HVAC_MODE_VALUES = "values"
+CONF_SWING_MODE_REGISTER = "swing_mode_register"
+CONF_SWING_MODE_SWING_BOTH = "swing_mode_state_both"
+CONF_SWING_MODE_SWING_HORIZ = "swing_mode_state_horizontal"
+CONF_SWING_MODE_SWING_OFF = "swing_mode_state_off"
+CONF_SWING_MODE_SWING_ON = "swing_mode_state_on"
+CONF_SWING_MODE_SWING_VERT = "swing_mode_state_vertical"
+CONF_SWING_MODE_VALUES = "values"
 CONF_WRITE_REGISTERS = "write_registers"
 CONF_VERIFY = "verify"
 CONF_VIRTUAL_COUNT = "virtual_count"
 CONF_WRITE_TYPE = "write_type"
 CONF_ZERO_SUPPRESS = "zero_suppress"
+CONF_MAP = "map"
+CONF_MULTI_SCALE = "multi_scale"
 
 RTUOVERTCP = "rtuovertcp"
 SERIAL = "serial"
@@ -128,8 +137,8 @@ SERVICE_STOP = "stop"
 SERVICE_RESTART = "restart"
 
 # dispatcher signals
-SIGNAL_STOP_ENTITY = "modbus.stop"
-SIGNAL_START_ENTITY = "modbus.start"
+SIGNAL_STOP_ENTITY = "modbus_new.stop"
+SIGNAL_START_ENTITY = "modbus_new.start"
 
 # integration names
 DEFAULT_HUB = "modbus_hub"
@@ -137,7 +146,7 @@ DEFAULT_SCAN_INTERVAL = 15  # seconds
 DEFAULT_SLAVE = 1
 DEFAULT_STRUCTURE_PREFIX = ">f"
 DEFAULT_TEMP_UNIT = "C"
-MODBUS_DOMAIN = "modbus"
+MODBUS_DOMAIN = "modbus_new"
 
 ACTIVE_SCAN_INTERVAL = 2  # limit to force an extra update
 
